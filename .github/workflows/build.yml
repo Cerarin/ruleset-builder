@@ -37,7 +37,7 @@ jobs:
           curl -fsSL "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-v1-${MIHOMO_VERSION}.gz" -o /tmp/mihomo.gz
           gzip -dc /tmp/mihomo.gz > /tmp/mihomo
           chmod +x /tmp/mihomo
-          /tmp/mihomo version
+          ls -lh /tmp/mihomo
 
       - name: Build rulesets
         run: python scripts/build.py --mihomo /tmp/mihomo
