@@ -1,0 +1,113 @@
+# 测试配置：只用于人工排查。
+# 所有测试规则最终统一输出 YAML，便于直接查看 payload。
+# 正式规则请继续维护 config/rulesets.yaml。
+
+collections:
+  # ---------- domain ----------
+  domain-yaml:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/microsoft.yaml
+    type: yaml
+
+  domain-list:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/github.list
+    type: list
+
+  domain-mrs:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/steam@cn.mrs
+    type: mrs
+
+  # ---------- ip / cidr ----------
+  # MetaCubeX geoip/cn.mrs 是典型的 GeoIP/CIDR MRS 输入。
+  geoip-cn-mrs:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs
+    type: mrs
+
+  # 用 inline 构造一个最小 CIDR 测试集合，方便排查 IPv4 / IPv6。
+  ip-inline:
+    inline:
+      - IP-CIDR,1.1.1.0/24
+      - IP-CIDR,8.8.8.8/32
+      - IP-CIDR6,2001:4860:4860::8888/128
+      - 10.10.0.0/16
+
+  # ---------- exclude ----------
+  github-list:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/github.list
+    type: list
+
+  microsoft-yaml:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/microsoft.yaml
+    type: yaml
+
+rulesets:
+  # 1. YAML -> domain YAML
+  test-domain-from-yaml:
+    behavior: domain
+    output: yaml
+    sources:
+      - ref: domain-yaml
+
+  # 2. LIST -> domain YAML
+  test-domain-from-list:
+    behavior: domain
+    output: yaml
+    sources:
+      - ref: domain-list
+
+  # 3. MRS -> domain YAML
+  test-domain-from-mrs:
+    behavior: domain
+    output: yaml
+    sources:
+      - ref: domain-mrs
+
+  # 4. 多来源 domain 合并 -> YAML
+  test-domain-merge:
+    behavior: domain
+    output: yaml
+    sources:
+      - ref: domain-yaml
+      - ref: domain-list
+      - ref: domain-mrs
+      - inline:
+          - DOMAIN-SUFFIX,example.com
+          - DOMAIN,api.example.com
+          - +.example.net
+
+  # 5. domain 合并 + exclude -> YAML
+  # 用 microsoft - github 验证父域/子域语义剔除。
+  test-domain-exclude:
+    behavior: domain
+    output: yaml
+    sources:
+      - ref: microsoft-yaml
+    exclude:
+      - ref: github-list
+
+  # 6. GeoIP / CIDR MRS -> ipcidr YAML
+  test-ipcidr-from-geoip-mrs:
+    behavior: ipcidr
+    output: yaml
+    sources:
+      - ref: geoip-cn-mrs
+
+  # 7. inline CIDR -> ipcidr YAML
+  test-ipcidr-from-inline:
+    behavior: ipcidr
+    output: yaml
+    sources:
+      - ref: ip-inline
+
+  # 8. CIDR 合并 + exclude -> YAML
+  test-ipcidr-merge-exclude:
+    behavior: ipcidr
+    output: yaml
+    sources:
+      - ref: ip-inline
+      - inline:
+          - IP-CIDR,1.1.2.0/24
+          - IP-CIDR6,2001:db8::/32
+    exclude:
+      - inline:
+          - IP-CIDR,1.1.1.128/25
+          - IP-CIDR6,2001:db8:1::/48
