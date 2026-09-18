@@ -41,7 +41,7 @@ collections:
     type: yaml
   
   metaai:
-    url: https://github.com/liandu2024/clash/blob/main/list/MetaAi.listhttps://github.com/liandu2024/clash/raw/refs/heads/main/list/MetaAi.list
+    url: https://github.com/liandu2024/clash/raw/refs/heads/main/list/MetaAi.list
     type: list
 
 
