@@ -1,6 +1,8 @@
 # 核心流程：collections（集合源） -> rulesets.sources（组合） -> exclude（剔除） -> output（list/mrs）
 
 collections:
+
+  # Infrastructure
   github:
     url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/github.yaml
     type: yaml
@@ -9,6 +11,8 @@ collections:
     url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/microsoft.yaml
     type: yaml
 
+
+  # AI
   openai:
     url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/openai.yaml
     type: yaml
@@ -20,7 +24,28 @@ collections:
   anthropic:
     url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/anthropic.yaml
     type: yaml
+  xai:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/xai.yaml
+    type: yaml
 
+  perplexity:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/perplexity.yaml
+    type: yaml
+
+  github-copilot:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/github-copilot.yaml
+    type: yaml
+
+  cursor:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cursor.yaml
+    type: yaml
+  
+  metaai:
+    url: https://github.com/liandu2024/clash/blob/main/list/MetaAi.listhttps://github.com/liandu2024/clash/raw/refs/heads/main/list/MetaAi.list
+    type: yaml
+
+
+  # Games
   game-download-cn:
     url: https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/Game/GameDownloadCN/GameDownloadCN.yaml
     type: yaml
@@ -59,3 +84,8 @@ rulesets:
       - ref: anthropic
       - ref: openai
       - ref: google-gemini
+      - ref: xai
+      - ref: perplexity
+      - ref: github-copilot
+      - ref: cursor
+      - ref: metaai
