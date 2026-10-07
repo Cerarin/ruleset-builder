@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      MIHOMO_VERSION: v1.19.30
+      MIHOMO_VERSION: v1.19.32
     steps:
       - name: Checkout
         uses: actions/checkout@v4
