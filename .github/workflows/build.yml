@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MIHOMO_VERSION: v1.19.32
+      SING_BOX_VERSION: 1.15.0-alpha.12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,8 +40,19 @@ jobs:
           chmod +x /tmp/mihomo
           ls -lh /tmp/mihomo
 
+
+      - name: Install sing-box
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz" -o /tmp/sing-box.tar.gz
+          tar -xzf /tmp/sing-box.tar.gz -C /tmp
+          mv /tmp/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box /tmp/sing-box
+          chmod +x /tmp/sing-box
+          /tmp/sing-box version
+
       - name: Build rulesets
-        run: python scripts/build.py --mihomo /tmp/mihomo
+        run: python scripts/build.py --mihomo /tmp/mihomo --singbox /tmp/sing-box
 
       - name: Commit generated rulesets
         run: |

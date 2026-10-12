@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import ipaddress
+import json
 import os
+import shutil
 import re
 import subprocess
 import sys
@@ -15,6 +17,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import yaml
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT / ".cache"
@@ -183,6 +191,8 @@ def detect_type(source: dict) -> str:
     url = str(source.get("url", "")).lower().split("?", 1)[0]
     if url.endswith(".mrs"):
         return "mrs"
+    if url.endswith(".srs"):
+        return "srs"
     if url.endswith(".yaml") or url.endswith(".yml"):
         return "yaml"
     return "list"
@@ -201,6 +211,28 @@ def convert_mrs_to_text(data: bytes, mihomo: str, behavior: str) -> str:
             die(f"mihomo MRS decode failed: {result.stderr.strip() or result.stdout.strip()}")
         return dst.read_text(encoding="utf-8")
 
+def convert_srs_to_text(data: bytes, singbox: str, behavior: str) -> str:
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "source.srs"
+        dst = Path(td) / "source.json"
+        src.write_bytes(data)
+        cmd = [singbox, "rule-set", "decompile", str(src), "-o", str(dst)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            die(f"sing-box SRS decode failed: {result.stderr.strip() or result.stdout.strip()}")
+        obj = json.loads(dst.read_text(encoding="utf-8"))
+        lines: list[str] = []
+        for r in obj.get("rules", []):
+            if behavior == "domain":
+                for d in r.get("domain", []):
+                    lines.append(f"DOMAIN,{d}")
+                for s in r.get("domain_suffix", []):
+                    lines.append(f"DOMAIN-SUFFIX,{s}")
+            elif behavior == "ipcidr":
+                for c in r.get("ip_cidr", []):
+                    lines.append(f"IP-CIDR,{c}")
+        return "\n".join(lines) + ("\n" if lines else "")
+
 
 # ---------------------------- source collection ---------------------------
 
@@ -208,6 +240,7 @@ def load_source(
     source: dict,
     behavior: str,
     mihomo: str,
+    singbox: str,
     collections: dict,
     collection_cache: dict[str, set[Rule]],
 ) -> set[Rule]:
@@ -216,7 +249,7 @@ def load_source(
         if ref not in collections:
             die(f"unknown collection: {ref}")
         if ref not in collection_cache:
-            collection_cache[ref] = load_source(collections[ref], behavior, mihomo, collections, collection_cache)
+            collection_cache[ref] = load_source(collections[ref], behavior, mihomo, singbox, collections, collection_cache)
         return set(collection_cache[ref])
 
     typ = detect_type(source)
@@ -234,6 +267,8 @@ def load_source(
         return parse_yaml_text(data.decode("utf-8-sig", errors="replace"), behavior)
     if typ == "mrs":
         return parse_text(convert_mrs_to_text(data, mihomo, behavior), behavior)
+    if typ == "srs":
+        return parse_text(convert_srs_to_text(data, singbox, behavior), behavior)
     die(f"unsupported source type: {typ}")
     return set()
 
@@ -363,6 +398,61 @@ def compile_mrs(values: set[Rule], path: Path, mihomo: str, behavior: str) -> No
         if result.returncode != 0:
             die(f"mihomo MRS compile failed for {path.name}: {result.stderr.strip() or result.stdout.strip()}")
 
+def render_singbox_payload(values: set[Rule], behavior: str) -> dict:
+    if behavior == "domain":
+        domains: list[str] = []
+        domain_suffixes: list[str] = []
+        for rule in sorted(values):
+            if rule.kind == "DOMAIN":
+                domains.append(rule.value)
+            elif rule.kind == "DOMAIN-SUFFIX":
+                domain_suffixes.append(rule.value)
+        headless_rule: dict[str, list[str]] = {}
+        if domains:
+            headless_rule["domain"] = domains
+        if domain_suffixes:
+            headless_rule["domain_suffix"] = domain_suffixes
+        return {
+            "version": 2,
+            "rules": [headless_rule] if headless_rule else [],
+        }
+    if behavior == "ipcidr":
+        cidrs = [rule.value for rule in sorted(values)]
+        headless_rule = {}
+        if cidrs:
+            headless_rule["ip_cidr"] = cidrs
+        return {
+            "version": 2,
+            "rules": [headless_rule] if headless_rule else [],
+        }
+    die(f"unsupported behavior for sing-box rule-set: {behavior}")
+    return {}
+
+
+def compile_srs(values: set[Rule], path: Path, singbox: str, behavior: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as td:
+        src_json = Path(td) / "rule-set.json"
+        payload = render_singbox_payload(values, behavior)
+        src_json.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        cmd = [singbox, "rule-set", "compile", str(src_json), "-o", str(path)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            die(f"sing-box SRS compile failed for {path.name}: {result.stderr.strip() or result.stdout.strip()}")
+
+
+def normalize_outputs(raw: any) -> list[str]:
+    if isinstance(raw, list):
+        items = [str(x).strip().lower() for x in raw if str(x).strip()]
+    else:
+        items = [x.strip().lower() for x in str(raw).split(",") if x.strip()]
+    if not items:
+        die("output cannot be empty")
+    for out in items:
+        if out not in {"list", "yaml", "mrs", "srs"}:
+            die(f"unsupported output format: {out}")
+    return items
+
 
 # --------------------------------- build ----------------------------------
 
@@ -370,17 +460,16 @@ def build_one(
     name: str,
     spec: dict,
     mihomo: str,
+    singbox: str,
     collections: dict,
     collection_cache: dict[str, set[Rule]],
 ) -> None:
     behavior = str(spec.get("behavior", "domain")).lower()
-    output = str(spec.get("output", "mrs")).lower()
+    outputs = normalize_outputs(spec.get("output", ["mrs"]))
     if behavior not in {"domain", "ipcidr"}:
         die(f"{name}: behavior must be domain or ipcidr")
-    if output not in {"list", "yaml", "mrs"}:
-        die(f"{name}: output must be list, yaml, or mrs")
 
-    print(f"\n==> {name} [{behavior} -> {output}]")
+    print(f"\n==> {name} [{behavior} -> {', '.join(outputs)}]")
     merged: set[Rule] = set()
     sources = spec.get("sources", [])
     if not isinstance(sources, list) or not sources:
@@ -388,34 +477,65 @@ def build_one(
     for source in sources:
         if not isinstance(source, dict):
             die(f"{name}: invalid source entry")
-        merged.update(load_source(source, behavior, mihomo, collections, collection_cache))
+        merged.update(load_source(source, behavior, mihomo, singbox, collections, collection_cache))
     print(f"  = collected: {len(merged)} unique {behavior} rules")
 
     excludes: set[Rule] = set()
     for source in spec.get("exclude", []) or []:
         if not isinstance(source, dict):
             die(f"{name}: invalid exclude entry")
-        excludes.update(load_source(source, behavior, mihomo, collections, collection_cache))
+        excludes.update(load_source(source, behavior, mihomo, singbox, collections, collection_cache))
     if excludes:
         merged, removed = apply_excludes(merged, excludes, behavior)
         print(f"  - excluded: {removed} rules; remaining: {len(merged)}")
 
-    out = OUTPUT_DIR / f"{name}.{output}"
-    if output == "list":
-        write_list(merged, out, behavior)
-    elif output == "yaml":
-        write_yaml(merged, out, behavior)
-    else:
-        compile_mrs(merged, out, mihomo, behavior)
-    print(f"  ✓ output: {out.relative_to(ROOT)} ({len(merged)} rules)")
+    for out_format in outputs:
+        out = OUTPUT_DIR / f"{name}.{out_format}"
+        if out_format == "list":
+            write_list(merged, out, behavior)
+        elif out_format == "yaml":
+            write_yaml(merged, out, behavior)
+        elif out_format == "mrs":
+            compile_mrs(merged, out, mihomo, behavior)
+        elif out_format == "srs":
+            compile_srs(merged, out, singbox, behavior)
+        print(f"  ✓ output: {out.relative_to(ROOT)} ({len(merged)} rules)")
+
+
+def resolve_executable(name: str, fallback_candidates: list[Path]) -> str:
+    if shutil.which(name):
+        return name
+    for cand in fallback_candidates:
+        if cand.is_file():
+            return str(cand)
+    return name
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Collect, exclude, and compile Mihomo rule sets")
+    parser = argparse.ArgumentParser(description="Collect, exclude, and compile Mihomo / sing-box rule sets")
     parser.add_argument("-c", "--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--mihomo", default=os.environ.get("MIHOMO", "mihomo"))
+    parser.add_argument("--singbox", default=os.environ.get("SING_BOX", "sing-box"))
     parser.add_argument("--only", action="append", help="build only the named ruleset; repeatable")
     args = parser.parse_args()
+
+    mihomo_bin = resolve_executable(
+        args.mihomo,
+        [
+            ROOT / "mihomo-windows-amd64-v3.exe",
+            ROOT / "mihomo.exe",
+            ROOT / "mihomo",
+        ],
+    )
+
+    singbox_bin = resolve_executable(
+        args.singbox,
+        [
+            ROOT / "sing-box.exe",
+            ROOT / "sing-box",
+            ROOT.parent / "proxy-configuration" / "sb115" / "sing-box-1.15.0-alpha.12-windows-amd64" / "sing-box.exe",
+        ],
+    )
 
     with args.config.open("r", encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
@@ -435,7 +555,7 @@ def main() -> None:
             die(f"unknown ruleset: {name}")
         if not isinstance(rulesets[name], dict):
             die(f"ruleset {name} must be a mapping")
-        build_one(name, rulesets[name], args.mihomo, collections, collection_cache)
+        build_one(name, rulesets[name], mihomo_bin, singbox_bin, collections, collection_cache)
 
 
 if __name__ == "__main__":
