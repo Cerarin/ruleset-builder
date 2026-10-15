@@ -62,7 +62,69 @@ collections:
     url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-games-cn.mrs
     type: mrs
 
+
+  # IP Collections
+  geoip-cn:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.yaml
+    type: yaml
+
+  geoip-private:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/private.yaml
+    type: yaml
+
+  geoip-telegram:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/telegram.yaml
+    type: yaml
+
+  geoip-netflix:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/netflix.yaml
+    type: yaml
+
+  geoip-google:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/google.yaml
+    type: yaml
+
 rulesets:
+  cnip:
+    behavior: ipcidr
+    output:
+      - mrs
+      - srs
+    sources:
+      - ref: geoip-cn
+
+  private:
+    behavior: ipcidr
+    output:
+      - mrs
+      - srs
+    sources:
+      - ref: geoip-private
+
+  telegram-ip:
+    behavior: ipcidr
+    output:
+      - mrs
+      - srs
+    sources:
+      - ref: geoip-telegram
+
+  netflix-ip:
+    behavior: ipcidr
+    output:
+      - mrs
+      - srs
+    sources:
+      - ref: geoip-netflix
+
+  google-ip:
+    behavior: ipcidr
+    output:
+      - mrs
+      - srs
+    sources:
+      - ref: geoip-google
+
   fakeip-filter:
     behavior: domain
     output:
