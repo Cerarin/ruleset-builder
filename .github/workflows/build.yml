@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-rulesets-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,6 +34,14 @@ jobs:
 
       - name: Install dependencies
         run: pip install --disable-pip-version-check pyyaml
+
+      - name: Validate configuration
+        run: |
+          if git grep -n -E '^(<<<<<<< |=======($| )|>>>>>>> )' -- config/ scripts/ .github/workflows/; then
+            echo "Unresolved merge conflict markers found."
+            exit 1
+          fi
+          python -c "from pathlib import Path; import yaml; [yaml.safe_load(p.read_text(encoding='utf-8')) for p in Path('config').glob('*.yaml')]"
 
       - name: Install Mihomo
         shell: bash
@@ -51,14 +63,16 @@ jobs:
           chmod +x /tmp/sing-box
           /tmp/sing-box version
 
-      - name: Build rulesets
-        run: python scripts/build.py --mihomo /tmp/mihomo --singbox /tmp/sing-box
+      - name: Build rulesets from scratch
+        run: |
+          rm -rf ruleset/
+          python scripts/build.py --mihomo /tmp/mihomo --singbox /tmp/sing-box
 
       - name: Commit generated rulesets
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ruleset/
+          git add -A ruleset/
           if git diff --cached --quiet; then
             echo "No generated changes."
           else

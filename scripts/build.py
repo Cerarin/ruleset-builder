@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -163,21 +164,27 @@ def parse_inline(source: dict, behavior: str) -> set[Rule]:
 
 # --------------------------------- fetch ----------------------------------
 
-def fetch(url: str) -> bytes:
+def fetch(url: str, retries: int = 3) -> bytes:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(url.encode()).hexdigest()
     cache_file = CACHE_DIR / key
     req = Request(url, headers={"User-Agent": "ruleset-builder/0.3"})
-    try:
-        with urlopen(req, timeout=60) as resp:
-            data = resp.read()
-        cache_file.write_bytes(data)
-        return data
-    except (HTTPError, URLError, TimeoutError) as exc:
-        if cache_file.exists():
-            print(f"  ! fetch failed, using cache: {url}", file=sys.stderr)
-            return cache_file.read_bytes()
-        raise RuntimeError(f"failed to download {url}: {exc}") from exc
+    for attempt in range(1, retries + 1):
+        try:
+            with urlopen(req, timeout=60) as resp:
+                data = resp.read()
+            cache_file.write_bytes(data)
+            return data
+        except (HTTPError, URLError, TimeoutError) as exc:
+            if attempt < retries:
+                sleep_time = attempt * 2
+                print(f"  ! fetch error ({exc}), retrying in {sleep_time}s... [{attempt}/{retries}]", file=sys.stderr)
+                time.sleep(sleep_time)
+            else:
+                if cache_file.exists():
+                    print(f"  ! fetch failed after retries, using cache: {url}", file=sys.stderr)
+                    return cache_file.read_bytes()
+                raise RuntimeError(f"failed to download {url}: {exc}") from exc
 
 
 def detect_type(source: dict) -> str:
