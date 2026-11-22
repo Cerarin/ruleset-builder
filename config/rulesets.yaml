@@ -17,37 +17,9 @@ collections:
 
 
   # AI
-  openai:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/openai.yaml
+  ai-!cn:
+    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ai-!cn.yaml
     type: yaml
-  
-  google-gemini:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/google-gemini.yaml
-    type: yaml
-  
-  anthropic:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/anthropic.yaml
-    type: yaml
-  xai:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/xai.yaml
-    type: yaml
-
-  perplexity:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/perplexity.yaml
-    type: yaml
-
-  github-copilot:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/github-copilot.yaml
-    type: yaml
-
-  cursor:
-    url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cursor.yaml
-    type: yaml
-  
-  metaai:
-    url: https://github.com/liandu2024/clash/raw/refs/heads/main/list/MetaAi.list
-    type: list
-
 
   # Games
   game-download-cn:
@@ -88,39 +60,34 @@ rulesets:
   cnip:
     behavior: ipcidr
     output:
-      - mrs
       - srs
     sources:
       - ref: geoip-cn
 
-  private:
+  privateip:
     behavior: ipcidr
     output:
-      - mrs
       - srs
     sources:
       - ref: geoip-private
 
-  telegram-ip:
+  telegramip:
     behavior: ipcidr
     output:
-      - mrs
       - srs
     sources:
       - ref: geoip-telegram
 
-  netflix-ip:
+  netflixip:
     behavior: ipcidr
     output:
-      - mrs
       - srs
     sources:
       - ref: geoip-netflix
 
-  google-ip:
+  googleip:
     behavior: ipcidr
     output:
-      - mrs
       - srs
     sources:
       - ref: geoip-google
@@ -161,11 +128,4 @@ rulesets:
       - mrs
       - srs
     sources:
-      - ref: anthropic
-      - ref: openai
-      - ref: google-gemini
-      - ref: xai
-      - ref: perplexity
-      - ref: github-copilot
-      - ref: cursor
-      - ref: metaai
+      - ref: ai-!cn
